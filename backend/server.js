@@ -15,7 +15,6 @@ const OpenAI = require('openai');
 const app = express();
 const server = http.createServer(app);
 
-// Allow all origins in dev; restrict in production via env var
 const io = new Server(server, {
   cors: {
     origin: process.env.CORS_ORIGIN || '*',
@@ -31,57 +30,51 @@ const openai = new OpenAI({
 
 // ─── In-Memory State ─────────────────────────────────────────────────────────
 
-let currentWord = '';               // The active word set by the teacher
-const answerHistory = [];           // All submitted answers this session
-let connectedStudents = 0;          // Live student count (teachers excluded)
+let currentWord = '';         // 當前單字
+let roundActive = false;      // 是否開放作答
+let currentRound = 0;         // 第幾輪（0 = 尚未開始）
+const rounds = [];            // 每輪的資料 { roundNum, word, answers: [] }
+let connectedStudents = 0;
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 
 app.use(express.json());
-
-// Serve the frontend folder as static files
 app.use(express.static(path.join(__dirname, '..', 'frontend')));
 
 // ─── REST Routes ─────────────────────────────────────────────────────────────
 
-// Return full answer history (useful for page reload / teacher dashboard)
-app.get('/api/history', (req, res) => {
-  res.json(answerHistory);
+app.get('/api/rounds', (req, res) => {
+  res.json(rounds);
 });
 
-// Return the current word (useful on student page load)
 app.get('/api/current-word', (req, res) => {
-  res.json({ word: currentWord });
+  res.json({ word: currentWord, roundActive, currentRound });
 });
 
-// ─── OpenAI Evaluation ───────────────────────────────────────────────────────
+// ─── AI 評估 ─────────────────────────────────────────────────────────────────
 
-/**
- * Send the sentence + target word to GPT for evaluation.
- * Returns a structured JSON result.
- */
 async function evaluateSentence(word, sentence) {
-  const prompt = `You are an English teacher evaluating a student's sentence exercise.
+  const prompt = `你是一位英文老師，正在批改學生的造句練習。
 
-Target word: "${word}"
-Student's sentence: "${sentence}"
+目標單字：「${word}」
+學生的句子：「${sentence}」
 
-Evaluate the sentence and respond with ONLY a valid JSON object (no markdown fences):
+請評估這個句子，並且只回傳一個合法的 JSON 物件（不要加任何 markdown 符號）：
 {
-  "grammar": true or false,
-  "uses_word": true or false,
-  "meaningful": true or false,
-  "score": integer from 0 to 100,
-  "feedback": "One or two sentences of constructive feedback for the student.",
-  "example": "A good example sentence using the word '${word}'."
+  "grammar": true 或 false,
+  "uses_word": true 或 false,
+  "meaningful": true 或 false,
+  "score": 0 到 100 的整數,
+  "feedback": "用繁體中文給學生一到兩句具體的建議。",
+  "example": "用「${word}」這個單字造一個好的範例句子（英文）。"
 }
 
-Scoring guide:
-- Start at 100
-- Deduct 30 if grammar is wrong
-- Deduct 30 if the target word is not used
-- Deduct 20 if the sentence is not meaningful
-- Minor deductions for weak vocabulary or very short sentences`;
+計分標準：
+- 滿分 100 分
+- 文法錯誤扣 30 分
+- 沒有使用目標單字扣 30 分
+- 句子不合邏輯或沒有意義扣 20 分
+- 句子太短或用字很弱可小扣分`;
 
   const response = await openai.chat.completions.create({
     model: 'llama-3.1-8b-instant', // Groq 免費模型，速度極快
@@ -97,54 +90,72 @@ Scoring guide:
 
 io.on('connection', (socket) => {
   const role = socket.handshake.query.role; // 'teacher' or 'student'
-  console.log(`[+] ${role} connected: ${socket.id}`);
+  console.log(`[+] ${role} 連線: ${socket.id}`);
 
   if (role === 'student') {
     connectedStudents++;
-    // Notify all teachers of updated count
     io.emit('student_count', { count: connectedStudents });
   }
 
-  // ── On connect: send current state to the joining client ──
+  // 連線時把目前狀態送給新加入的 client
   socket.emit('init', {
     word: currentWord,
-    history: role === 'teacher' ? answerHistory : [],
+    roundActive,
+    currentRound,
+    rounds: role === 'teacher' ? rounds : [],
     studentCount: connectedStudents,
   });
 
-  // ── Teacher sets a new word ──────────────────────────────
-  socket.on('set_word', ({ word }) => {
-    if (role !== 'teacher') return; // only teachers can set the word
+  // ── 老師：開始新一輪 ──────────────────────────────────────
+  socket.on('start_round', ({ word }) => {
+    if (role !== 'teacher') return;
 
     currentWord = word.trim();
-    console.log(`[Word] Set to: "${currentWord}"`);
+    roundActive = true;
+    currentRound++;
 
-    // Broadcast new word to ALL connected clients
-    io.emit('word_update', { word: currentWord });
+    // 建立新一輪的資料容器
+    rounds.push({ roundNum: currentRound, word: currentWord, answers: [] });
+
+    console.log(`[第${currentRound}輪開始] 單字：${currentWord}`);
+
+    // 廣播給所有人
+    io.emit('round_started', { word: currentWord, roundNum: currentRound });
   });
 
-  // ── Student submits a sentence ───────────────────────────
+  // ── 老師：結束本輪 ────────────────────────────────────────
+  socket.on('end_round', () => {
+    if (role !== 'teacher') return;
+    if (!roundActive) return;
+
+    roundActive = false;
+    console.log(`[第${currentRound}輪結束]`);
+
+    io.emit('round_ended', { roundNum: currentRound });
+  });
+
+  // ── 學生：提交句子 ────────────────────────────────────────
   socket.on('submit_sentence', async ({ sentence, studentName }) => {
     if (role !== 'student') return;
 
-    const name = (studentName || 'Anonymous').trim().slice(0, 40);
+    const name = (studentName || '匿名').trim().slice(0, 40);
     const trimmedSentence = (sentence || '').trim();
 
-    // Guard: word must be set
     if (!currentWord) {
-      socket.emit('evaluation_result', {
-        error: 'The teacher has not set a word yet. Please wait.',
-      });
+      socket.emit('evaluation_result', { error: '老師還沒有設定單字，請稍候。' });
       return;
     }
 
-    // Guard: sentence must not be empty
+    if (!roundActive) {
+      socket.emit('evaluation_result', { error: '本輪已結束，請等待老師開始下一輪。' });
+      return;
+    }
+
     if (!trimmedSentence) {
-      socket.emit('evaluation_result', { error: 'Please write a sentence first.' });
+      socket.emit('evaluation_result', { error: '請先輸入句子。' });
       return;
     }
 
-    // Notify the submitting student that evaluation is in progress
     socket.emit('evaluating', true);
 
     try {
@@ -154,41 +165,43 @@ io.on('connection', (socket) => {
         id: Date.now(),
         studentName: name,
         word: currentWord,
+        roundNum: currentRound,
         sentence: trimmedSentence,
         result,
         timestamp: new Date().toISOString(),
       };
 
-      // Persist in session history
-      answerHistory.push(entry);
+      // 存進對應輪次
+      const round = rounds.find(r => r.roundNum === currentRound);
+      if (round) round.answers.push(entry);
 
-      // Send full result back to the submitting student
+      // 回傳給學生
       socket.emit('evaluation_result', {
         result,
         sentence: trimmedSentence,
         word: currentWord,
       });
 
-      // Push the new entry to the teacher dashboard (all teachers)
+      // 推送給老師看板
       io.emit('new_answer', entry);
 
     } catch (err) {
       console.error('[Groq Error]', err.message);
       socket.emit('evaluation_result', {
-        error: 'AI evaluation failed. Check your API key or try again.',
+        error: 'AI 批改失敗，請確認 API Key 是否正確。',
       });
     } finally {
       socket.emit('evaluating', false);
     }
   });
 
-  // ── Disconnect cleanup ───────────────────────────────────
+  // ── 斷線清理 ──────────────────────────────────────────────
   socket.on('disconnect', () => {
     if (role === 'student') {
       connectedStudents = Math.max(0, connectedStudents - 1);
       io.emit('student_count', { count: connectedStudents });
     }
-    console.log(`[-] ${role} disconnected: ${socket.id}`);
+    console.log(`[-] ${role} 離線: ${socket.id}`);
   });
 });
 

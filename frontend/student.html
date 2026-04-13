@@ -1,10 +1,27 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Student – Sentence Builder</title>
+  <title>學生 – Sentence Builder</title>
   <link rel="stylesheet" href="style.css" />
+  <style>
+    .round-banner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 6px 16px;
+      border-radius: 999px;
+      font-size: .85rem;
+      font-weight: 600;
+      margin-bottom: 14px;
+      text-align: center;
+    }
+    .round-banner.open   { background: var(--green-light); color: var(--green); }
+    .round-banner.closed { background: var(--gray-100); color: var(--gray-400); }
+    .round-banner.waiting { background: var(--brand-light); color: var(--brand-dark); }
+  </style>
 </head>
 <body>
   <div class="page-wrap" style="max-width:620px;">
@@ -14,57 +31,63 @@
       <h1>
         ✏️ Sentence Builder
         <span class="badge badge-student">
-          <span class="dot dot-green"></span> Student
+          <span class="dot dot-green"></span> 學生
         </span>
       </h1>
       <div class="conn-status">
         <span class="conn-dot" id="connDot"></span>
-        <span id="connLabel">Connecting…</span>
+        <span id="connLabel">連線中…</span>
       </div>
     </header>
 
-    <!-- Current Word Display -->
+    <!-- 輪次狀態橫幅 -->
+    <div class="round-banner waiting" id="roundBanner">
+      等待老師開始…
+    </div>
+
+    <!-- 單字顯示 -->
     <div class="word-display">
-      <div class="label">Your Word</div>
+      <div class="label">本輪單字</div>
       <div class="word" id="wordDisplay">
-        <span class="waiting">Waiting for teacher…</span>
+        <span class="waiting">等待老師設定單字…</span>
       </div>
     </div>
 
-    <!-- Student Name + Sentence Input -->
+    <!-- 輸入區 -->
     <div class="card">
-      <div class="card-title">👤 Your Info</div>
+      <div class="card-title">👤 你的名字</div>
       <input
         type="text"
         id="nameInput"
-        placeholder="Your name (optional)"
+        placeholder="輸入你的名字（選填）"
         maxlength="40"
         autocomplete="off"
         style="margin-bottom:14px; width:100%;"
       />
 
-      <div class="card-title">✍️ Write Your Sentence</div>
+      <div class="card-title">✍️ 造句</div>
       <textarea
         id="sentenceInput"
-        placeholder="Write a sentence using the word above…"
+        placeholder="用上面的單字造一個句子…"
         maxlength="500"
       ></textarea>
 
       <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
-        <button class="btn-primary" id="submitBtn" disabled>
-          Submit Sentence
-        </button>
-        <button class="btn-secondary" id="clearBtn">Clear</button>
+        <button class="btn-primary" id="submitBtn" disabled>提交句子</button>
+        <button class="btn-secondary" id="clearBtn">清除</button>
+      </div>
+      <div style="margin-top:8px; font-size:.78rem; color:var(--gray-400);">
+        快捷鍵：Ctrl + Enter 提交
       </div>
     </div>
 
-    <!-- Result Card -->
+    <!-- 批改結果 -->
     <div class="result-card" id="resultCard">
       <div class="result-headline" id="resultHeadline"></div>
       <div class="result-checks" id="resultChecks"></div>
       <div class="score-bar-wrap">
         <div class="score-label">
-          <span>Score</span>
+          <span>得分</span>
           <span id="scoreNum">0</span>/100
         </div>
         <div class="score-bar">
@@ -75,15 +98,14 @@
       <div class="example-text" id="exampleText" style="display:none;"></div>
     </div>
 
-    <!-- My Submission History (within session) -->
+    <!-- 我的作答紀錄 -->
     <div class="card" id="myHistoryCard" style="display:none;">
-      <div class="card-title">🕓 My Previous Answers</div>
+      <div class="card-title">🕓 我的作答紀錄</div>
       <div class="history-wrap" id="myHistory"></div>
     </div>
 
-  </div><!-- /.page-wrap -->
+  </div>
 
-  <!-- Toast -->
   <div id="toast"></div>
 
   <script src="/socket.io/socket.io.js"></script>
@@ -91,107 +113,126 @@
     // ─── State ────────────────────────────────────────────────────────────────
     let currentWord = '';
     let isEvaluating = false;
-    const myAnswers = [];
+    let roundOpen = false;
 
-    // ─── Socket Connection (role=student) ─────────────────────────────────────
+    // ─── Socket ───────────────────────────────────────────────────────────────
     const socket = io({ query: { role: 'student' } });
 
-    // ─── DOM Refs ─────────────────────────────────────────────────────────────
-    const wordDisplay   = document.getElementById('wordDisplay');
-    const nameInput     = document.getElementById('nameInput');
-    const sentenceInput = document.getElementById('sentenceInput');
-    const submitBtn     = document.getElementById('submitBtn');
-    const clearBtn      = document.getElementById('clearBtn');
-    const resultCard    = document.getElementById('resultCard');
+    // ─── DOM ──────────────────────────────────────────────────────────────────
+    const wordDisplay    = document.getElementById('wordDisplay');
+    const nameInput      = document.getElementById('nameInput');
+    const sentenceInput  = document.getElementById('sentenceInput');
+    const submitBtn      = document.getElementById('submitBtn');
+    const clearBtn       = document.getElementById('clearBtn');
+    const resultCard     = document.getElementById('resultCard');
     const resultHeadline = document.getElementById('resultHeadline');
-    const resultChecks  = document.getElementById('resultChecks');
-    const scoreNum      = document.getElementById('scoreNum');
-    const scoreFill     = document.getElementById('scoreFill');
-    const feedbackText  = document.getElementById('feedbackText');
-    const exampleText   = document.getElementById('exampleText');
-    const connDot       = document.getElementById('connDot');
-    const connLabel     = document.getElementById('connLabel');
-    const myHistoryCard = document.getElementById('myHistoryCard');
-    const myHistory     = document.getElementById('myHistory');
+    const resultChecks   = document.getElementById('resultChecks');
+    const scoreNum       = document.getElementById('scoreNum');
+    const scoreFill      = document.getElementById('scoreFill');
+    const feedbackText   = document.getElementById('feedbackText');
+    const exampleText    = document.getElementById('exampleText');
+    const connDot        = document.getElementById('connDot');
+    const connLabel      = document.getElementById('connLabel');
+    const myHistoryCard  = document.getElementById('myHistoryCard');
+    const myHistory      = document.getElementById('myHistory');
+    const roundBanner    = document.getElementById('roundBanner');
 
-    // ─── Connection Status ─────────────────────────────────────────────────────
+    // ─── 連線狀態 ─────────────────────────────────────────────────────────────
     socket.on('connect', () => {
       connDot.className = 'conn-dot online';
-      connLabel.textContent = 'Connected';
+      connLabel.textContent = '已連線';
     });
-
     socket.on('disconnect', () => {
       connDot.className = 'conn-dot offline';
-      connLabel.textContent = 'Disconnected';
+      connLabel.textContent = '已斷線';
     });
 
-    // ─── Init: receive current word on page load ──────────────────────────────
-    socket.on('init', ({ word }) => {
+    // ─── Init ─────────────────────────────────────────────────────────────────
+    socket.on('init', ({ word, roundActive, currentRound }) => {
       if (word) applyWord(word);
+      if (roundActive) {
+        roundOpen = true;
+        setBannerOpen(currentRound);
+        submitBtn.disabled = !word;
+      } else if (currentRound > 0) {
+        setBannerClosed(currentRound);
+      }
     });
 
-    // ─── Teacher broadcasts a new word ────────────────────────────────────────
-    socket.on('word_update', ({ word }) => {
+    // ─── 新一輪開始 ───────────────────────────────────────────────────────────
+    socket.on('round_started', ({ word, roundNum }) => {
+      roundOpen = true;
       applyWord(word);
-      showToast(`New word: "${word}"`);
+      setBannerOpen(roundNum);
+      submitBtn.disabled = false;
 
-      // Clear previous result and textarea for the new round
+      // 清除上一輪的結果和輸入
       resultCard.className = 'result-card';
       sentenceInput.value = '';
       sentenceInput.focus();
+
+      showToast(`第 ${roundNum} 輪開始！單字：${word}`);
     });
 
-    // ─── Apply and animate the word display ──────────────────────────────────
+    // ─── 本輪結束 ─────────────────────────────────────────────────────────────
+    socket.on('round_ended', ({ roundNum }) => {
+      roundOpen = false;
+      submitBtn.disabled = true;
+      setBannerClosed(roundNum);
+      showToast('本輪作答已結束，等待下一輪');
+    });
+
+    // ─── 套用單字並動畫 ───────────────────────────────────────────────────────
     function applyWord(word) {
       currentWord = word;
       wordDisplay.textContent = word;
       wordDisplay.classList.remove('pop');
-      void wordDisplay.offsetWidth; // force reflow for re-animation
+      void wordDisplay.offsetWidth;
       wordDisplay.classList.add('pop');
-      submitBtn.disabled = false;
     }
 
-    // ─── Evaluation in progress (server confirms it started) ──────────────────
+    // ─── 橫幅狀態 ─────────────────────────────────────────────────────────────
+    function setBannerOpen(roundNum) {
+      roundBanner.className = 'round-banner open';
+      roundBanner.textContent = `✅ 第 ${roundNum} 輪作答中`;
+    }
+    function setBannerClosed(roundNum) {
+      roundBanner.className = 'round-banner closed';
+      roundBanner.textContent = `⏹ 第 ${roundNum} 輪已結束，等待下一輪…`;
+      submitBtn.disabled = true;
+    }
+
+    // ─── 評估中（伺服器回應） ─────────────────────────────────────────────────
     socket.on('evaluating', (status) => {
       isEvaluating = status;
       if (status) {
-        submitBtn.innerHTML = '<span class="spinner"></span> Evaluating…';
+        submitBtn.innerHTML = '<span class="spinner"></span> 批改中…';
         submitBtn.disabled = true;
       } else {
-        submitBtn.textContent = 'Submit Sentence';
-        submitBtn.disabled = !currentWord;
+        submitBtn.textContent = '提交句子';
+        submitBtn.disabled = !roundOpen;
       }
     });
 
-    // ─── Receive evaluation result ─────────────────────────────────────────────
+    // ─── 收到批改結果 ─────────────────────────────────────────────────────────
     socket.on('evaluation_result', ({ result, sentence, error }) => {
-      if (error) {
-        showToast('Error: ' + error);
-        return;
-      }
+      if (error) { showToast('錯誤：' + error); return; }
       renderResult(result, sentence);
     });
 
-    // ─── Submit handler ───────────────────────────────────────────────────────
+    // ─── 提交 ─────────────────────────────────────────────────────────────────
     submitBtn.addEventListener('click', submitSentence);
     sentenceInput.addEventListener('keydown', (e) => {
-      // Ctrl+Enter or Cmd+Enter to submit
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') submitSentence();
     });
 
     function submitSentence() {
-      if (isEvaluating || !currentWord) return;
-
+      if (isEvaluating || !roundOpen || !currentWord) return;
       const sentence = sentenceInput.value.trim();
-      if (!sentence) {
-        showToast('Please write a sentence first.');
-        sentenceInput.focus();
-        return;
-      }
-
+      if (!sentence) { showToast('請先輸入句子'); sentenceInput.focus(); return; }
       socket.emit('submit_sentence', {
         sentence,
-        studentName: nameInput.value.trim() || 'Anonymous',
+        studentName: nameInput.value.trim() || '匿名',
       });
     }
 
@@ -201,61 +242,51 @@
       sentenceInput.focus();
     });
 
-    // ─── Render the AI result ─────────────────────────────────────────────────
+    // ─── 渲染批改結果 ─────────────────────────────────────────────────────────
     function renderResult(result, sentence) {
       const { grammar, uses_word, meaningful, score, feedback, example } = result;
 
-      // Determine overall pass/warn/fail
-      const passed = grammar && uses_word && meaningful;
+      const passed  = grammar && uses_word && meaningful;
       const partial = !passed && (grammar || uses_word || meaningful);
-      const cardClass = passed ? 'pass' : partial ? 'warn' : 'fail';
-      const emoji     = passed ? '🎉' : partial ? '⚠️' : '❌';
-      const headline  = passed ? `${emoji} Great job!` : partial ? `${emoji} Almost there!` : `${emoji} Needs Work`;
+      const cardClass  = passed ? 'pass' : partial ? 'warn' : 'fail';
+      const headline   = passed ? '🎉 太棒了！' : partial ? '⚠️ 再加油！' : '❌ 需要改進';
 
       resultCard.className = `result-card show ${cardClass}`;
       resultHeadline.textContent = headline;
 
-      // Check pills
       resultChecks.innerHTML = [
-        { label: 'Grammar correct',   ok: grammar },
-        { label: 'Uses the word',     ok: uses_word },
-        { label: 'Meaningful sentence', ok: meaningful },
+        { label: '文法正確',   ok: grammar },
+        { label: '有用到單字', ok: uses_word },
+        { label: '句意通順',   ok: meaningful },
       ].map(c =>
         `<span class="check-pill ${c.ok ? 'ok' : 'bad'}">${c.ok ? '✓' : '✗'} ${c.label}</span>`
       ).join('');
 
-      // Score bar
       const fillClass = score >= 70 ? 'high' : score >= 40 ? 'medium' : 'low';
       scoreNum.textContent = score;
       scoreFill.className = `score-fill ${fillClass}`;
-      // Trigger animation on next frame
       requestAnimationFrame(() => {
         requestAnimationFrame(() => { scoreFill.style.width = score + '%'; });
       });
 
-      // Feedback
       feedbackText.textContent = feedback || '';
 
-      // Example sentence
       if (example) {
-        exampleText.textContent = `Example: "${example}"`;
+        exampleText.textContent = `範例句：「${example}」`;
         exampleText.style.display = 'block';
       } else {
         exampleText.style.display = 'none';
       }
 
-      // Add to personal history
       addToMyHistory({ sentence, result });
-
-      // Scroll result into view
       resultCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
-    // ─── Personal history ─────────────────────────────────────────────────────
+    // ─── 個人紀錄 ─────────────────────────────────────────────────────────────
     function addToMyHistory({ sentence, result }) {
-      myAnswers.unshift({ sentence, result, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
       myHistoryCard.style.display = 'block';
       const scoreClass = result.score >= 70 ? 'high' : result.score >= 40 ? 'medium' : 'low';
+      const time = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
       const div = document.createElement('div');
       div.className = 'history-item';
       div.innerHTML = `
@@ -265,12 +296,13 @@
         </div>
         <div class="hi-pills" style="margin-top:6px;">
           ${[
-            { label: 'Grammar',    ok: result.grammar },
-            { label: 'Uses word',  ok: result.uses_word },
-            { label: 'Meaningful', ok: result.meaningful },
+            { label: '文法', ok: result.grammar },
+            { label: '用字', ok: result.uses_word },
+            { label: '句意', ok: result.meaningful },
           ].map(c => `<span class="check-pill ${c.ok ? 'ok' : 'bad'}">${c.ok ? '✓' : '✗'} ${c.label}</span>`).join('')}
-          <span class="hi-time" style="margin-left:auto">${myAnswers[0].time}</span>
+          <span class="hi-time" style="margin-left:auto">${time}</span>
         </div>
+        ${result.feedback ? `<div class="feedback-text" style="margin-top:6px;font-size:.82rem;">${escHtml(result.feedback)}</div>` : ''}
       `;
       myHistory.insertBefore(div, myHistory.firstChild);
     }
@@ -285,7 +317,6 @@
       toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
     }
 
-    // XSS guard
     function escHtml(str) {
       return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
