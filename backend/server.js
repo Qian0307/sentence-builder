@@ -54,27 +54,28 @@ app.get('/api/current-word', (req, res) => {
 // ─── AI 評估 ─────────────────────────────────────────────────────────────────
 
 async function evaluateSentence(word, sentence) {
-  const prompt = `你是一位英文老師，正在批改學生的造句練習。
+  const prompt = `You are a bilingual English teacher evaluating a student's sentence exercise.
 
-目標單字：「${word}」
-學生的句子：「${sentence}」
+Target word: "${word}"
+Student's sentence: "${sentence}"
 
-請評估這個句子，並且只回傳一個合法的 JSON 物件（不要加任何 markdown 符號）：
+Respond with ONLY a valid JSON object (no markdown fences):
 {
-  "grammar": true 或 false,
-  "uses_word": true 或 false,
-  "meaningful": true 或 false,
-  "score": 0 到 100 的整數,
-  "feedback": "用繁體中文給學生一到兩句具體的建議。",
-  "example": "用「${word}」這個單字造一個好的範例句子（英文）。"
+  "grammar": true or false,
+  "uses_word": true or false,
+  "meaningful": true or false,
+  "score": integer from 0 to 100,
+  "feedback_zh": "用繁體中文給學生一到兩句具體的建議。",
+  "feedback_en": "One or two sentences of constructive feedback in English.",
+  "example": "A good example sentence using the word '${word}'."
 }
 
-計分標準：
-- 滿分 100 分
-- 文法錯誤扣 30 分
-- 沒有使用目標單字扣 30 分
-- 句子不合邏輯或沒有意義扣 20 分
-- 句子太短或用字很弱可小扣分`;
+Scoring guide:
+- Start at 100
+- Deduct 30 if grammar is wrong
+- Deduct 30 if the target word is not used
+- Deduct 20 if the sentence is not meaningful
+- Minor deductions for weak vocabulary or very short sentences`;
 
   const response = await openai.chat.completions.create({
     model: 'llama-3.1-8b-instant', // Groq 免費模型，速度極快

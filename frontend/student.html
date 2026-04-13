@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>學生 – Sentence Builder</title>
+  <title>學生 Student – Sentence Builder</title>
   <link rel="stylesheet" href="style.css" />
   <style>
     .round-banner {
@@ -18,89 +18,161 @@
       margin-bottom: 14px;
       text-align: center;
     }
-    .round-banner.open   { background: var(--green-light); color: var(--green); }
-    .round-banner.closed { background: var(--gray-100); color: var(--gray-400); }
+    .round-banner.open    { background: var(--green-light); color: var(--green); }
+    .round-banner.closed  { background: var(--gray-100);   color: var(--gray-400); }
     .round-banner.waiting { background: var(--brand-light); color: var(--brand-dark); }
+
+    /* 雙語標籤 bilingual label */
+    .bilingual {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+    .bilingual .zh { font-size: .95rem; font-weight: 600; }
+    .bilingual .en { font-size: .78rem; color: var(--gray-400); font-style: italic; }
+
+    /* 雙語回饋 bilingual feedback */
+    .feedback-block {
+      margin-top: 10px;
+      border-left: 3px solid var(--gray-200);
+      padding-left: 10px;
+    }
+    .feedback-block .fb-zh {
+      font-size: .9rem;
+      color: var(--gray-600);
+      margin-bottom: 4px;
+    }
+    .feedback-block .fb-en {
+      font-size: .85rem;
+      color: var(--gray-400);
+      font-style: italic;
+    }
+
+    /* check pill 雙語 */
+    .check-pill-wrap {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .check-pill-bi {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 5px 12px;
+      border-radius: 10px;
+      font-size: .78rem;
+      font-weight: 600;
+      gap: 1px;
+    }
+    .check-pill-bi .lbl-zh { font-size: .8rem; }
+    .check-pill-bi .lbl-en { font-size: .7rem; font-weight: 400; opacity: .8; }
+    .check-pill-bi.ok  { background: #bbf7d0; color: var(--green); }
+    .check-pill-bi.bad { background: #fecaca; color: var(--red); }
   </style>
 </head>
 <body>
-  <div class="page-wrap" style="max-width:620px;">
+  <div class="page-wrap" style="max-width:640px;">
 
     <!-- Header -->
     <header>
       <h1>
         ✏️ Sentence Builder
         <span class="badge badge-student">
-          <span class="dot dot-green"></span> 學生
+          <span class="dot dot-green"></span>
+          <span class="bilingual" style="display:inline-flex; flex-direction:column; gap:0;">
+            <span style="font-size:.75rem;">學生</span>
+            <span style="font-size:.65rem; opacity:.7;">Student</span>
+          </span>
         </span>
       </h1>
       <div class="conn-status">
         <span class="conn-dot" id="connDot"></span>
-        <span id="connLabel">連線中…</span>
+        <span id="connLabel">連線中… Connecting…</span>
       </div>
     </header>
 
     <!-- 輪次狀態橫幅 -->
     <div class="round-banner waiting" id="roundBanner">
-      等待老師開始…
+      等待老師開始… Waiting for teacher…
     </div>
 
     <!-- 單字顯示 -->
     <div class="word-display">
-      <div class="label">本輪單字</div>
+      <div class="label">本輪單字 · Word of the Round</div>
       <div class="word" id="wordDisplay">
-        <span class="waiting">等待老師設定單字…</span>
+        <span class="waiting" style="font-size:1rem;">等待老師設定單字… Waiting for word…</span>
       </div>
     </div>
 
     <!-- 輸入區 -->
     <div class="card">
-      <div class="card-title">👤 你的名字</div>
+      <div class="card-title">
+        👤 <span class="bilingual" style="display:inline-flex;">
+          <span class="zh">你的名字</span>&nbsp;<span class="en">/ Your Name</span>
+        </span>
+      </div>
       <input
         type="text"
         id="nameInput"
-        placeholder="輸入你的名字（選填）"
+        placeholder="輸入名字 / Enter your name (optional)"
         maxlength="40"
         autocomplete="off"
         style="margin-bottom:14px; width:100%;"
       />
 
-      <div class="card-title">✍️ 造句</div>
+      <div class="card-title">
+        ✍️ <span class="bilingual" style="display:inline-flex;">
+          <span class="zh">造句</span>&nbsp;<span class="en">/ Write a Sentence</span>
+        </span>
+      </div>
       <textarea
         id="sentenceInput"
-        placeholder="用上面的單字造一個句子…"
+        placeholder="用上面的單字造一個英文句子… / Write an English sentence using the word above…"
         maxlength="500"
       ></textarea>
 
       <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
-        <button class="btn-primary" id="submitBtn" disabled>提交句子</button>
-        <button class="btn-secondary" id="clearBtn">清除</button>
+        <button class="btn-primary" id="submitBtn" disabled>
+          提交句子 / Submit
+        </button>
+        <button class="btn-secondary" id="clearBtn">清除 / Clear</button>
       </div>
-      <div style="margin-top:8px; font-size:.78rem; color:var(--gray-400);">
-        快捷鍵：Ctrl + Enter 提交
+      <div style="margin-top:8px; font-size:.75rem; color:var(--gray-400);">
+        快捷鍵 Shortcut：Ctrl + Enter 提交 / Submit
       </div>
     </div>
 
     <!-- 批改結果 -->
     <div class="result-card" id="resultCard">
       <div class="result-headline" id="resultHeadline"></div>
-      <div class="result-checks" id="resultChecks"></div>
+
+      <!-- 雙語 check pills -->
+      <div class="check-pill-wrap" id="resultChecks"></div>
+
+      <!-- 分數 -->
       <div class="score-bar-wrap">
         <div class="score-label">
-          <span>得分</span>
-          <span id="scoreNum">0</span>/100
+          <span>得分 Score</span>
+          <span><span id="scoreNum">0</span>/100</span>
         </div>
         <div class="score-bar">
           <div class="score-fill" id="scoreFill"></div>
         </div>
       </div>
-      <div class="feedback-text" id="feedbackText"></div>
+
+      <!-- 雙語回饋 -->
+      <div class="feedback-block" id="feedbackBlock" style="display:none;">
+        <div class="fb-zh" id="feedbackZh"></div>
+        <div class="fb-en" id="feedbackEn"></div>
+      </div>
+
+      <!-- 範例句 -->
       <div class="example-text" id="exampleText" style="display:none;"></div>
     </div>
 
     <!-- 我的作答紀錄 -->
     <div class="card" id="myHistoryCard" style="display:none;">
-      <div class="card-title">🕓 我的作答紀錄</div>
+      <div class="card-title">🕓 我的作答紀錄 / My Answer History</div>
       <div class="history-wrap" id="myHistory"></div>
     </div>
 
@@ -110,15 +182,12 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    // ─── State ────────────────────────────────────────────────────────────────
     let currentWord = '';
     let isEvaluating = false;
     let roundOpen = false;
 
-    // ─── Socket ───────────────────────────────────────────────────────────────
     const socket = io({ query: { role: 'student' } });
 
-    // ─── DOM ──────────────────────────────────────────────────────────────────
     const wordDisplay    = document.getElementById('wordDisplay');
     const nameInput      = document.getElementById('nameInput');
     const sentenceInput  = document.getElementById('sentenceInput');
@@ -129,7 +198,9 @@
     const resultChecks   = document.getElementById('resultChecks');
     const scoreNum       = document.getElementById('scoreNum');
     const scoreFill      = document.getElementById('scoreFill');
-    const feedbackText   = document.getElementById('feedbackText');
+    const feedbackBlock  = document.getElementById('feedbackBlock');
+    const feedbackZh     = document.getElementById('feedbackZh');
+    const feedbackEn     = document.getElementById('feedbackEn');
     const exampleText    = document.getElementById('exampleText');
     const connDot        = document.getElementById('connDot');
     const connLabel      = document.getElementById('connLabel');
@@ -137,14 +208,14 @@
     const myHistory      = document.getElementById('myHistory');
     const roundBanner    = document.getElementById('roundBanner');
 
-    // ─── 連線狀態 ─────────────────────────────────────────────────────────────
+    // ─── 連線狀態 ────────────────────────────────────────────────────────────
     socket.on('connect', () => {
       connDot.className = 'conn-dot online';
-      connLabel.textContent = '已連線';
+      connLabel.textContent = '已連線 Connected';
     });
     socket.on('disconnect', () => {
       connDot.className = 'conn-dot offline';
-      connLabel.textContent = '已斷線';
+      connLabel.textContent = '已斷線 Disconnected';
     });
 
     // ─── Init ─────────────────────────────────────────────────────────────────
@@ -159,30 +230,26 @@
       }
     });
 
-    // ─── 新一輪開始 ───────────────────────────────────────────────────────────
+    // ─── 新一輪 ───────────────────────────────────────────────────────────────
     socket.on('round_started', ({ word, roundNum }) => {
       roundOpen = true;
       applyWord(word);
       setBannerOpen(roundNum);
       submitBtn.disabled = false;
-
-      // 清除上一輪的結果和輸入
       resultCard.className = 'result-card';
       sentenceInput.value = '';
       sentenceInput.focus();
-
-      showToast(`第 ${roundNum} 輪開始！單字：${word}`);
+      showToast(`第 ${roundNum} 輪開始 Round ${roundNum} started！Word: ${word}`);
     });
 
-    // ─── 本輪結束 ─────────────────────────────────────────────────────────────
+    // ─── 輪次結束 ─────────────────────────────────────────────────────────────
     socket.on('round_ended', ({ roundNum }) => {
       roundOpen = false;
       submitBtn.disabled = true;
       setBannerClosed(roundNum);
-      showToast('本輪作答已結束，等待下一輪');
+      showToast('本輪已結束 Round ended — 等待下一輪 Wait for next round');
     });
 
-    // ─── 套用單字並動畫 ───────────────────────────────────────────────────────
     function applyWord(word) {
       currentWord = word;
       wordDisplay.textContent = word;
@@ -191,32 +258,31 @@
       wordDisplay.classList.add('pop');
     }
 
-    // ─── 橫幅狀態 ─────────────────────────────────────────────────────────────
-    function setBannerOpen(roundNum) {
+    function setBannerOpen(n) {
       roundBanner.className = 'round-banner open';
-      roundBanner.textContent = `✅ 第 ${roundNum} 輪作答中`;
+      roundBanner.textContent = `✅ 第 ${n} 輪作答中 · Round ${n} in progress`;
     }
-    function setBannerClosed(roundNum) {
+    function setBannerClosed(n) {
       roundBanner.className = 'round-banner closed';
-      roundBanner.textContent = `⏹ 第 ${roundNum} 輪已結束，等待下一輪…`;
+      roundBanner.textContent = `⏹ 第 ${n} 輪已結束 · Round ${n} ended — 等待下一輪 Waiting…`;
       submitBtn.disabled = true;
     }
 
-    // ─── 評估中（伺服器回應） ─────────────────────────────────────────────────
+    // ─── 評估中 ───────────────────────────────────────────────────────────────
     socket.on('evaluating', (status) => {
       isEvaluating = status;
       if (status) {
-        submitBtn.innerHTML = '<span class="spinner"></span> 批改中…';
+        submitBtn.innerHTML = '<span class="spinner"></span> 批改中 Evaluating…';
         submitBtn.disabled = true;
       } else {
-        submitBtn.textContent = '提交句子';
+        submitBtn.textContent = '提交句子 / Submit';
         submitBtn.disabled = !roundOpen;
       }
     });
 
-    // ─── 收到批改結果 ─────────────────────────────────────────────────────────
+    // ─── 批改結果 ─────────────────────────────────────────────────────────────
     socket.on('evaluation_result', ({ result, sentence, error }) => {
-      if (error) { showToast('錯誤：' + error); return; }
+      if (error) { showToast('錯誤 Error: ' + error); return; }
       renderResult(result, sentence);
     });
 
@@ -229,10 +295,10 @@
     function submitSentence() {
       if (isEvaluating || !roundOpen || !currentWord) return;
       const sentence = sentenceInput.value.trim();
-      if (!sentence) { showToast('請先輸入句子'); sentenceInput.focus(); return; }
+      if (!sentence) { showToast('請先輸入句子 Please write a sentence first'); sentenceInput.focus(); return; }
       socket.emit('submit_sentence', {
         sentence,
-        studentName: nameInput.value.trim() || '匿名',
+        studentName: nameInput.value.trim() || '匿名 Anonymous',
       });
     }
 
@@ -242,26 +308,36 @@
       sentenceInput.focus();
     });
 
-    // ─── 渲染批改結果 ─────────────────────────────────────────────────────────
+    // ─── 渲染結果 ─────────────────────────────────────────────────────────────
     function renderResult(result, sentence) {
-      const { grammar, uses_word, meaningful, score, feedback, example } = result;
+      const { grammar, uses_word, meaningful, score, feedback_zh, feedback_en, example } = result;
 
       const passed  = grammar && uses_word && meaningful;
       const partial = !passed && (grammar || uses_word || meaningful);
-      const cardClass  = passed ? 'pass' : partial ? 'warn' : 'fail';
-      const headline   = passed ? '🎉 太棒了！' : partial ? '⚠️ 再加油！' : '❌ 需要改進';
+      const cardClass = passed ? 'pass' : partial ? 'warn' : 'fail';
+      const headline  = passed
+        ? '🎉 太棒了！Great Job!'
+        : partial
+        ? '⚠️ 再加油！Keep It Up!'
+        : '❌ 需要改進 Needs Improvement';
 
       resultCard.className = `result-card show ${cardClass}`;
       resultHeadline.textContent = headline;
 
+      // 雙語 check pills
       resultChecks.innerHTML = [
-        { label: '文法正確',   ok: grammar },
-        { label: '有用到單字', ok: uses_word },
-        { label: '句意通順',   ok: meaningful },
-      ].map(c =>
-        `<span class="check-pill ${c.ok ? 'ok' : 'bad'}">${c.ok ? '✓' : '✗'} ${c.label}</span>`
-      ).join('');
+        { zh: '文法正確', en: 'Grammar',    ok: grammar },
+        { zh: '有用到單字', en: 'Word Used', ok: uses_word },
+        { zh: '句意通順', en: 'Meaningful', ok: meaningful },
+      ].map(c => `
+        <span class="check-pill-bi ${c.ok ? 'ok' : 'bad'}">
+          <span>${c.ok ? '✓' : '✗'}</span>
+          <span class="lbl-zh">${c.zh}</span>
+          <span class="lbl-en">${c.en}</span>
+        </span>
+      `).join('');
 
+      // 分數條
       const fillClass = score >= 70 ? 'high' : score >= 40 ? 'medium' : 'low';
       scoreNum.textContent = score;
       scoreFill.className = `score-fill ${fillClass}`;
@@ -269,10 +345,18 @@
         requestAnimationFrame(() => { scoreFill.style.width = score + '%'; });
       });
 
-      feedbackText.textContent = feedback || '';
+      // 雙語回饋
+      if (feedback_zh || feedback_en) {
+        feedbackZh.textContent = feedback_zh || '';
+        feedbackEn.textContent = feedback_en || '';
+        feedbackBlock.style.display = 'block';
+      } else {
+        feedbackBlock.style.display = 'none';
+      }
 
+      // 範例句
       if (example) {
-        exampleText.textContent = `範例句：「${example}」`;
+        exampleText.textContent = `範例句 Example: "${example}"`;
         exampleText.style.display = 'block';
       } else {
         exampleText.style.display = 'none';
@@ -294,15 +378,22 @@
           <span class="hi-sentence" style="font-style:italic;">"${escHtml(sentence)}"</span>
           <span class="score-badge ${scoreClass}">${result.score}/100</span>
         </div>
-        <div class="hi-pills" style="margin-top:6px;">
+        <div class="hi-pills" style="margin-top:6px; display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
           ${[
-            { label: '文法', ok: result.grammar },
-            { label: '用字', ok: result.uses_word },
-            { label: '句意', ok: result.meaningful },
-          ].map(c => `<span class="check-pill ${c.ok ? 'ok' : 'bad'}">${c.ok ? '✓' : '✗'} ${c.label}</span>`).join('')}
+            { zh: '文法', en: 'Grammar',    ok: result.grammar },
+            { zh: '用字', en: 'Word',       ok: result.uses_word },
+            { zh: '句意', en: 'Meaningful', ok: result.meaningful },
+          ].map(c => `
+            <span class="check-pill-bi ${c.ok ? 'ok' : 'bad'}">
+              <span>${c.ok ? '✓' : '✗'}</span>
+              <span class="lbl-zh">${c.zh}</span>
+              <span class="lbl-en">${c.en}</span>
+            </span>
+          `).join('')}
           <span class="hi-time" style="margin-left:auto">${time}</span>
         </div>
-        ${result.feedback ? `<div class="feedback-text" style="margin-top:6px;font-size:.82rem;">${escHtml(result.feedback)}</div>` : ''}
+        ${result.feedback_zh ? `<div style="margin-top:6px;font-size:.82rem;color:var(--gray-600);">${escHtml(result.feedback_zh)}</div>` : ''}
+        ${result.feedback_en ? `<div style="font-size:.78rem;color:var(--gray-400);font-style:italic;">${escHtml(result.feedback_en)}</div>` : ''}
       `;
       myHistory.insertBefore(div, myHistory.firstChild);
     }
@@ -314,7 +405,7 @@
       el.textContent = msg;
       el.classList.add('show');
       clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+      toastTimer = setTimeout(() => el.classList.remove('show'), 3500);
     }
 
     function escHtml(str) {

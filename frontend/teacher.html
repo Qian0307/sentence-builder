@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>老師看板 – Sentence Builder</title>
+  <title>老師看板 Teacher – Sentence Builder</title>
   <link rel="stylesheet" href="style.css" />
   <style>
     .round-tabs {
@@ -37,7 +37,7 @@
       font-size: .82rem;
       font-weight: 600;
     }
-    .round-status.open  { background: var(--green-light); color: var(--green); }
+    .round-status.open   { background: var(--green-light); color: var(--green); }
     .round-status.closed { background: var(--gray-100); color: var(--gray-400); }
     .btn-danger {
       background: var(--red-light);
@@ -45,6 +45,36 @@
       border: 1.5px solid #fecaca;
     }
     .btn-danger:hover { background: #fecaca; }
+
+    .bilingual-lbl {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      font-size: .72rem;
+    }
+    .bilingual-lbl .zh { color: var(--gray-600); font-weight: 600; }
+    .bilingual-lbl .en { color: var(--gray-400); font-weight: 400; font-style: italic; }
+
+    .feedback-block {
+      margin-top: 6px;
+      font-size: .82rem;
+    }
+    .feedback-block .fb-zh { color: var(--gray-600); }
+    .feedback-block .fb-en { color: var(--gray-400); font-style: italic; font-size: .78rem; }
+
+    .check-pill-bi {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 3px 9px;
+      border-radius: 8px;
+      font-size: .72rem;
+      font-weight: 600;
+      gap: 0;
+    }
+    .check-pill-bi .lbl-en { font-size: .66rem; font-weight: 400; opacity: .8; }
+    .check-pill-bi.ok  { background: #bbf7d0; color: var(--green); }
+    .check-pill-bi.bad { background: #fecaca; color: var(--red); }
   </style>
 </head>
 <body>
@@ -55,16 +85,17 @@
       <h1>
         📚 Sentence Builder
         <span class="badge badge-teacher">
-          <span class="dot dot-purple"></span> 老師
+          <span class="dot dot-purple"></span>
+          老師 Teacher
         </span>
       </h1>
       <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
         <div class="conn-status">
           <span class="conn-dot" id="connDot"></span>
-          <span id="connLabel">連線中…</span>
+          <span id="connLabel">連線中… Connecting…</span>
         </div>
         <a href="student.html" class="btn-secondary" style="text-decoration:none; padding:6px 14px; border-radius:8px; font-size:.85rem;">
-          開啟學生頁面 ↗
+          學生頁面 Student Page ↗
         </a>
       </div>
     </header>
@@ -73,29 +104,29 @@
     <div class="stats-bar">
       <div class="stat-box">
         <div class="stat-num" id="statStudents">0</div>
-        <div class="stat-lbl">學生在線</div>
+        <div class="bilingual-lbl"><span class="zh">學生在線</span><span class="en">Students Online</span></div>
       </div>
       <div class="stat-box">
         <div class="stat-num" id="statRound">0</div>
-        <div class="stat-lbl">目前輪次</div>
+        <div class="bilingual-lbl"><span class="zh">目前輪次</span><span class="en">Current Round</span></div>
       </div>
       <div class="stat-box">
         <div class="stat-num" id="statSubmissions">0</div>
-        <div class="stat-lbl">本輪提交</div>
+        <div class="bilingual-lbl"><span class="zh">本輪提交</span><span class="en">Submissions</span></div>
       </div>
       <div class="stat-box">
         <div class="stat-num" id="statAvgScore">—</div>
-        <div class="stat-lbl">本輪平均分</div>
+        <div class="bilingual-lbl"><span class="zh">平均分</span><span class="en">Avg Score</span></div>
       </div>
     </div>
 
     <!-- 輪次控制 -->
     <div class="card">
       <div class="card-title" style="justify-content:space-between; flex-wrap:wrap; gap:8px;">
-        <span>🎯 輪次控制</span>
+        <span>🎯 輪次控制 Round Control</span>
         <span class="round-status closed" id="roundStatus">
           <span class="dot dot-purple" style="animation:none; background:var(--gray-400)"></span>
-          尚未開始
+          尚未開始 Not started
         </span>
       </div>
 
@@ -103,37 +134,38 @@
         <input
           type="text"
           id="wordInput"
-          placeholder="輸入單字（例如：Apple）"
+          placeholder="輸入單字 Enter a word (e.g. Apple)"
           maxlength="60"
           autocomplete="off"
         />
-        <button class="btn-primary" id="startRoundBtn">▶ 開始新一輪</button>
+        <button class="btn-primary" id="startRoundBtn">▶ 開始新一輪 Start Round</button>
       </div>
 
       <button class="btn-danger" id="endRoundBtn" disabled style="width:100%;">
-        ⏹ 結束本輪作答
+        ⏹ 結束本輪作答 End Round
       </button>
 
-      <!-- 當前單字 + AI 範例 -->
       <div style="margin-top:16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-        <span style="font-size:.85rem; color:var(--gray-400);">目前單字：</span>
-        <strong id="activeWordDisplay" style="color:var(--brand); font-size:1.15rem;">(尚未設定)</strong>
+        <span style="font-size:.82rem; color:var(--gray-400);">目前單字 Current Word：</span>
+        <strong id="activeWordDisplay" style="color:var(--brand); font-size:1.15rem;">(尚未設定 None)</strong>
       </div>
       <div id="exampleBox" style="display:none; margin-top:10px;">
-        <div style="font-size:.75rem; color:var(--gray-400); text-transform:uppercase; letter-spacing:.06em; margin-bottom:4px;">AI 範例句</div>
+        <div style="font-size:.72rem; color:var(--gray-400); text-transform:uppercase; letter-spacing:.06em; margin-bottom:4px;">
+          AI 範例句 Example Sentence
+        </div>
         <div class="example-text" id="exampleSentence"></div>
       </div>
     </div>
 
-    <!-- 歷史答案（分輪次） -->
+    <!-- 歷史答案 -->
     <div class="card">
-      <div class="card-title" style="justify-content:space-between;">
-        <span>📋 學生答案</span>
+      <div class="card-title" style="justify-content:space-between; flex-wrap:wrap; gap:8px;">
+        <span>📋 學生答案 Student Answers</span>
         <div id="roundTabs" class="round-tabs"></div>
       </div>
       <div class="history-wrap" id="historyWrap">
         <div class="history-empty" id="historyEmpty">
-          還沒有答案，廣播單字並開始作答吧！
+          還沒有答案 No answers yet — 廣播單字並開始作答 Broadcast a word to begin！
         </div>
       </div>
     </div>
@@ -144,17 +176,13 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    // ─── State ────────────────────────────────────────────────────────────────
-    // rounds: { [roundNum]: { word, answers: [] } }
     const roundData = {};
-    let activeTab = null;       // 目前顯示哪一輪
+    let activeTab = null;
     let currentRoundNum = 0;
     let isRoundActive = false;
 
-    // ─── Socket ───────────────────────────────────────────────────────────────
     const socket = io({ query: { role: 'teacher' } });
 
-    // ─── DOM ──────────────────────────────────────────────────────────────────
     const wordInput         = document.getElementById('wordInput');
     const startRoundBtn     = document.getElementById('startRoundBtn');
     const endRoundBtn       = document.getElementById('endRoundBtn');
@@ -175,11 +203,11 @@
     // ─── 連線狀態 ─────────────────────────────────────────────────────────────
     socket.on('connect', () => {
       connDot.className = 'conn-dot online';
-      connLabel.textContent = '已連線';
+      connLabel.textContent = '已連線 Connected';
     });
     socket.on('disconnect', () => {
       connDot.className = 'conn-dot offline';
-      connLabel.textContent = '已斷線';
+      connLabel.textContent = '已斷線 Disconnected';
     });
 
     // ─── Init ─────────────────────────────────────────────────────────────────
@@ -187,8 +215,6 @@
       statStudents.textContent = studentCount;
       isRoundActive = roundActive;
       currentRoundNum = currentRound;
-
-      // 重建歷史輪次資料
       if (rounds && rounds.length) {
         rounds.forEach(r => {
           roundData[r.roundNum] = { word: r.word, answers: r.answers };
@@ -196,18 +222,14 @@
         });
         showTab(currentRound);
       }
-
       if (word) activeWordDisplay.textContent = word;
       if (roundActive) setRoundOpen(currentRound);
       else if (currentRound > 0) setRoundClosed();
     });
 
-    // ─── 學生人數 ──────────────────────────────────────────────────────────────
-    socket.on('student_count', ({ count }) => {
-      statStudents.textContent = count;
-    });
+    socket.on('student_count', ({ count }) => { statStudents.textContent = count; });
 
-    // ─── 新一輪開始（伺服器確認） ────────────────────────────────────────────
+    // ─── 新一輪 ───────────────────────────────────────────────────────────────
     socket.on('round_started', ({ word, roundNum }) => {
       currentRoundNum = roundNum;
       isRoundActive = true;
@@ -217,87 +239,74 @@
       activeWordDisplay.textContent = word;
       setRoundOpen(roundNum);
       exampleBox.style.display = 'none';
-      exampleSentence.textContent = '';
-      showToast(`第 ${roundNum} 輪開始，單字：${word}`);
+      showToast(`第 ${roundNum} 輪開始 Round ${roundNum} started — Word: ${word}`);
     });
 
-    // ─── 本輪結束（伺服器確認） ──────────────────────────────────────────────
     socket.on('round_ended', ({ roundNum }) => {
       isRoundActive = false;
       setRoundClosed();
-      showToast(`第 ${roundNum} 輪已結束`);
+      showToast(`第 ${roundNum} 輪已結束 Round ${roundNum} ended`);
     });
 
-    // ─── 新答案進來 ───────────────────────────────────────────────────────────
+    // ─── 新答案 ───────────────────────────────────────────────────────────────
     socket.on('new_answer', (entry) => {
       const { roundNum } = entry;
       if (!roundData[roundNum]) roundData[roundNum] = { word: entry.word, answers: [] };
       roundData[roundNum].answers.push(entry);
-
       if (entry.result.example) showExample(entry.result.example);
-
-      // 如果目前在看這一輪，直接插入
       if (activeTab === roundNum) {
         historyEmpty.style.display = 'none';
         prependHistoryItem(entry);
         refreshRoundStats(roundNum);
       }
-
-      showToast(`${entry.studentName} 提交了答案`);
+      showToast(`${entry.studentName} 提交了答案 submitted`);
     });
 
-    // ─── 開始新一輪 ───────────────────────────────────────────────────────────
+    // ─── 開始 / 結束 ──────────────────────────────────────────────────────────
     startRoundBtn.addEventListener('click', startRound);
     wordInput.addEventListener('keydown', e => { if (e.key === 'Enter') startRound(); });
 
     function startRound() {
       const word = wordInput.value.trim();
-      if (!word) { showToast('請先輸入單字'); return; }
+      if (!word) { showToast('請先輸入單字 Please enter a word'); return; }
       socket.emit('start_round', { word });
       wordInput.value = '';
     }
 
-    // ─── 結束本輪 ─────────────────────────────────────────────────────────────
     endRoundBtn.addEventListener('click', () => {
       if (!isRoundActive) return;
       socket.emit('end_round');
     });
 
-    // ─── 輪次 Tab 管理 ────────────────────────────────────────────────────────
-
+    // ─── Tab 管理 ─────────────────────────────────────────────────────────────
     function ensureTab(roundNum, word) {
       if (document.getElementById(`tab-${roundNum}`)) return;
       const btn = document.createElement('button');
       btn.className = 'round-tab';
       btn.id = `tab-${roundNum}`;
-      btn.textContent = `第${roundNum}輪：${word}`;
+      btn.textContent = `R${roundNum}: ${word}`;
       btn.addEventListener('click', () => showTab(roundNum));
       roundTabs.appendChild(btn);
     }
 
     function showTab(roundNum) {
       activeTab = roundNum;
-
-      // 更新 tab 樣式
       document.querySelectorAll('.round-tab').forEach(t => t.classList.remove('active'));
       const tab = document.getElementById(`tab-${roundNum}`);
       if (tab) tab.classList.add('active');
 
-      // 重新渲染歷史
       historyWrap.innerHTML = '';
       historyWrap.appendChild(historyEmpty);
 
       const data = roundData[roundNum];
       if (!data || !data.answers.length) {
         historyEmpty.style.display = '';
-        historyEmpty.textContent = `第 ${roundNum} 輪還沒有答案。`;
+        historyEmpty.textContent = `第 ${roundNum} 輪還沒有答案 No answers for Round ${roundNum} yet.`;
         statSubmissions.textContent = '0';
         statAvgScore.textContent = '—';
         return;
       }
-
       historyEmpty.style.display = 'none';
-      // 由新到舊顯示
       [...data.answers].reverse().forEach(prependHistoryItem);
       refreshRoundStats(roundNum);
     }
@@ -310,35 +319,38 @@
       statAvgScore.textContent = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
     }
 
-    // ─── 輪次狀態 UI ─────────────────────────────────────────────────────────
-
+    // ─── 輪次狀態 UI ──────────────────────────────────────────────────────────
     function setRoundOpen(roundNum) {
       statRound.textContent = roundNum;
       roundStatus.className = 'round-status open';
-      roundStatus.innerHTML = `<span class="dot dot-green"></span> 第 ${roundNum} 輪作答中`;
-      startRoundBtn.textContent = '▶ 開始新一輪（會結束目前輪次）';
+      roundStatus.innerHTML = `<span class="dot dot-green"></span> 第 ${roundNum} 輪作答中 Round ${roundNum} active`;
+      startRoundBtn.textContent = '▶ 開始新一輪 New Round';
       endRoundBtn.disabled = false;
     }
 
     function setRoundClosed() {
       roundStatus.className = 'round-status closed';
-      roundStatus.innerHTML = `<span class="dot" style="background:var(--gray-400);animation:none"></span> 作答已結束`;
-      startRoundBtn.textContent = '▶ 開始新一輪';
+      roundStatus.innerHTML = `<span class="dot" style="background:var(--gray-400);animation:none"></span> 作答已結束 Round ended`;
+      startRoundBtn.textContent = '▶ 開始新一輪 Start Round';
       endRoundBtn.disabled = true;
     }
 
     // ─── 渲染答案卡 ───────────────────────────────────────────────────────────
-
     function prependHistoryItem(entry) {
       const { studentName, sentence, result, timestamp } = entry;
       const time = new Date(timestamp).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
       const scoreClass = result.score >= 70 ? 'high' : result.score >= 40 ? 'medium' : 'low';
 
       const pills = [
-        { label: '文法正確', ok: result.grammar },
-        { label: '有用到單字', ok: result.uses_word },
-        { label: '句意通順', ok: result.meaningful },
-      ].map(c => `<span class="check-pill ${c.ok ? 'ok' : 'bad'}">${c.ok ? '✓' : '✗'} ${c.label}</span>`).join('');
+        { zh: '文法', en: 'Grammar',    ok: result.grammar },
+        { zh: '用字', en: 'Word Used',  ok: result.uses_word },
+        { zh: '句意', en: 'Meaningful', ok: result.meaningful },
+      ].map(c => `
+        <span class="check-pill-bi ${c.ok ? 'ok' : 'bad'}">
+          <span>${c.ok ? '✓' : '✗'} ${c.zh}</span>
+          <span class="lbl-en">${c.en}</span>
+        </span>
+      `).join('');
 
       const div = document.createElement('div');
       div.className = 'history-item';
@@ -348,11 +360,15 @@
           <span class="hi-time">${time}</span>
         </div>
         <div class="hi-sentence">"${escHtml(sentence)}"</div>
-        <div class="hi-pills">
+        <div class="hi-pills" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px;">
           ${pills}
           <span class="score-badge ${scoreClass}" style="margin-left:auto">${result.score}/100</span>
         </div>
-        ${result.feedback ? `<div class="feedback-text" style="margin-top:6px;font-size:.82rem;">${escHtml(result.feedback)}</div>` : ''}
+        ${result.feedback_zh || result.feedback_en ? `
+          <div class="feedback-block">
+            ${result.feedback_zh ? `<div class="fb-zh">${escHtml(result.feedback_zh)}</div>` : ''}
+            ${result.feedback_en ? `<div class="fb-en">${escHtml(result.feedback_en)}</div>` : ''}
+          </div>` : ''}
       `;
       historyWrap.insertBefore(div, historyWrap.firstChild);
     }
@@ -369,7 +385,7 @@
       el.textContent = msg;
       el.classList.add('show');
       clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+      toastTimer = setTimeout(() => el.classList.remove('show'), 3500);
     }
 
     function escHtml(str) {
