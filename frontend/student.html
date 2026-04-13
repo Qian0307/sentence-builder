@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Student – Sentence Builder</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="page-wrap" style="max-width:620px;">
+
+    <!-- Header -->
+    <header>
+      <h1>
+        ✏️ Sentence Builder
+        <span class="badge badge-student">
+          <span class="dot dot-green"></span> Student
+        </span>
+      </h1>
+      <div class="conn-status">
+        <span class="conn-dot" id="connDot"></span>
+        <span id="connLabel">Connecting…</span>
+      </div>
+    </header>
+
+    <!-- Current Word Display -->
+    <div class="word-display">
+      <div class="label">Your Word</div>
+      <div class="word" id="wordDisplay">
+        <span class="waiting">Waiting for teacher…</span>
+      </div>
+    </div>
+
+    <!-- Student Name + Sentence Input -->
+    <div class="card">
+      <div class="card-title">👤 Your Info</div>
+      <input
+        type="text"
+        id="nameInput"
+        placeholder="Your name (optional)"
+        maxlength="40"
+        autocomplete="off"
+        style="margin-bottom:14px; width:100%;"
+      />
+
+      <div class="card-title">✍️ Write Your Sentence</div>
+      <textarea
+        id="sentenceInput"
+        placeholder="Write a sentence using the word above…"
+        maxlength="500"
+      ></textarea>
+
+      <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
+        <button class="btn-primary" id="submitBtn" disabled>
+          Submit Sentence
+        </button>
+        <button class="btn-secondary" id="clearBtn">Clear</button>
+      </div>
+    </div>
+
+    <!-- Result Card -->
+    <div class="result-card" id="resultCard">
+      <div class="result-headline" id="resultHeadline"></div>
+      <div class="result-checks" id="resultChecks"></div>
+      <div class="score-bar-wrap">
+        <div class="score-label">
+          <span>Score</span>
+          <span id="scoreNum">0</span>/100
+        </div>
+        <div class="score-bar">
+          <div class="score-fill" id="scoreFill"></div>
+        </div>
+      </div>
+      <div class="feedback-text" id="feedbackText"></div>
+      <div class="example-text" id="exampleText" style="display:none;"></div>
+    </div>
+
+    <!-- My Submission History (within session) -->
+    <div class="card" id="myHistoryCard" style="display:none;">
+      <div class="card-title">🕓 My Previous Answers</div>
+      <div class="history-wrap" id="myHistory"></div>
+    </div>
+
+  </div><!-- /.page-wrap -->
+
+  <!-- Toast -->
+  <div id="toast"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    // ─── State ────────────────────────────────────────────────────────────────
+    let currentWord = '';
+    let isEvaluating = false;
+    const myAnswers = [];
+
+    // ─── Socket Connection (role=student) ─────────────────────────────────────
+    const socket = io({ query: { role: 'student' } });
+
+    // ─── DOM Refs ─────────────────────────────────────────────────────────────
+    const wordDisplay   = document.getElementById('wordDisplay');
+    const nameInput     = document.getElementById('nameInput');
+    const sentenceInput = document.getElementById('sentenceInput');
+    const submitBtn     = document.getElementById('submitBtn');
+    const clearBtn      = document.getElementById('clearBtn');
+    const resultCard    = document.getElementById('resultCard');
+    const resultHeadline = document.getElementById('resultHeadline');
+    const resultChecks  = document.getElementById('resultChecks');
+    const scoreNum      = document.getElementById('scoreNum');
+    const scoreFill     = document.getElementById('scoreFill');
+    const feedbackText  = document.getElementById('feedbackText');
+    const exampleText   = document.getElementById('exampleText');
+    const connDot       = document.getElementById('connDot');
+    const connLabel     = document.getElementById('connLabel');
+    const myHistoryCard = document.getElementById('myHistoryCard');
+    const myHistory     = document.getElementById('myHistory');
+
+    // ─── Connection Status ─────────────────────────────────────────────────────
+    socket.on('connect', () => {
+      connDot.className = 'conn-dot online';
+      connLabel.textContent = 'Connected';
+    });
+
+    socket.on('disconnect', () => {
+      connDot.className = 'conn-dot offline';
+      connLabel.textContent = 'Disconnected';
+    });
+
+    // ─── Init: receive current word on page load ──────────────────────────────
+    socket.on('init', ({ word }) => {
+      if (word) applyWord(word);
+    });
+
+    // ─── Teacher broadcasts a new word ────────────────────────────────────────
+    socket.on('word_update', ({ word }) => {
+      applyWord(word);
+      showToast(`New word: "${word}"`);
+
+      // Clear previous result and textarea for the new round
+      resultCard.className = 'result-card';
+      sentenceInput.value = '';
+      sentenceInput.focus();
+    });
+
+    // ─── Apply and animate the word display ──────────────────────────────────
+    function applyWord(word) {
+      currentWord = word;
+      wordDisplay.textContent = word;
+      wordDisplay.classList.remove('pop');
+      void wordDisplay.offsetWidth; // force reflow for re-animation
+      wordDisplay.classList.add('pop');
+      submitBtn.disabled = false;
+    }
+
+    // ─── Evaluation in progress (server confirms it started) ──────────────────
+    socket.on('evaluating', (status) => {
+      isEvaluating = status;
+      if (status) {
+        submitBtn.innerHTML = '<span class="spinner"></span> Evaluating…';
+        submitBtn.disabled = true;
+      } else {
+        submitBtn.textContent = 'Submit Sentence';
+        submitBtn.disabled = !currentWord;
+      }
+    });
+
+    // ─── Receive evaluation result ─────────────────────────────────────────────
+    socket.on('evaluation_result', ({ result, sentence, error }) => {
+      if (error) {
+        showToast('Error: ' + error);
+        return;
+      }
+      renderResult(result, sentence);
+    });
+
+    // ─── Submit handler ───────────────────────────────────────────────────────
+    submitBtn.addEventListener('click', submitSentence);
+    sentenceInput.addEventListener('keydown', (e) => {
+      // Ctrl+Enter or Cmd+Enter to submit
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') submitSentence();
+    });
+
+    function submitSentence() {
+      if (isEvaluating || !currentWord) return;
+
+      const sentence = sentenceInput.value.trim();
+      if (!sentence) {
+        showToast('Please write a sentence first.');
+        sentenceInput.focus();
+        return;
+      }
+
+      socket.emit('submit_sentence', {
+        sentence,
+        studentName: nameInput.value.trim() || 'Anonymous',
+      });
+    }
+
+    clearBtn.addEventListener('click', () => {
+      sentenceInput.value = '';
+      resultCard.className = 'result-card';
+      sentenceInput.focus();
+    });
+
+    // ─── Render the AI result ─────────────────────────────────────────────────
+    function renderResult(result, sentence) {
+      const { grammar, uses_word, meaningful, score, feedback, example } = result;
+
+      // Determine overall pass/warn/fail
+      const passed = grammar && uses_word && meaningful;
+      const partial = !passed && (grammar || uses_word || meaningful);
+      const cardClass = passed ? 'pass' : partial ? 'warn' : 'fail';
+      const emoji     = passed ? '🎉' : partial ? '⚠️' : '❌';
+      const headline  = passed ? `${emoji} Great job!` : partial ? `${emoji} Almost there!` : `${emoji} Needs Work`;
+
+      resultCard.className = `result-card show ${cardClass}`;
+      resultHeadline.textContent = headline;
+
+      // Check pills
+      resultChecks.innerHTML = [
+        { label: 'Grammar correct',   ok: grammar },
+        { label: 'Uses the word',     ok: uses_word },
+        { label: 'Meaningful sentence', ok: meaningful },
+      ].map(c =>
+        `<span class="check-pill ${c.ok ? 'ok' : 'bad'}">${c.ok ? '✓' : '✗'} ${c.label}</span>`
+      ).join('');
+
+      // Score bar
+      const fillClass = score >= 70 ? 'high' : score >= 40 ? 'medium' : 'low';
+      scoreNum.textContent = score;
+      scoreFill.className = `score-fill ${fillClass}`;
+      // Trigger animation on next frame
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => { scoreFill.style.width = score + '%'; });
+      });
+
+      // Feedback
+      feedbackText.textContent = feedback || '';
+
+      // Example sentence
+      if (example) {
+        exampleText.textContent = `Example: "${example}"`;
+        exampleText.style.display = 'block';
+      } else {
+        exampleText.style.display = 'none';
+      }
+
+      // Add to personal history
+      addToMyHistory({ sentence, result });
+
+      // Scroll result into view
+      resultCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    // ─── Personal history ─────────────────────────────────────────────────────
+    function addToMyHistory({ sentence, result }) {
+      myAnswers.unshift({ sentence, result, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+      myHistoryCard.style.display = 'block';
+      const scoreClass = result.score >= 70 ? 'high' : result.score >= 40 ? 'medium' : 'low';
+      const div = document.createElement('div');
+      div.className = 'history-item';
+      div.innerHTML = `
+        <div class="hi-header">
+          <span class="hi-sentence" style="font-style:italic;">"${escHtml(sentence)}"</span>
+          <span class="score-badge ${scoreClass}">${result.score}/100</span>
+        </div>
+        <div class="hi-pills" style="margin-top:6px;">
+          ${[
+            { label: 'Grammar',    ok: result.grammar },
+            { label: 'Uses word',  ok: result.uses_word },
+            { label: 'Meaningful', ok: result.meaningful },
+          ].map(c => `<span class="check-pill ${c.ok ? 'ok' : 'bad'}">${c.ok ? '✓' : '✗'} ${c.label}</span>`).join('')}
+          <span class="hi-time" style="margin-left:auto">${myAnswers[0].time}</span>
+        </div>
+      `;
+      myHistory.insertBefore(div, myHistory.firstChild);
+    }
+
+    // ─── Toast ────────────────────────────────────────────────────────────────
+    let toastTimer;
+    function showToast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+    }
+
+    // XSS guard
+    function escHtml(str) {
+      return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+  </script>
+</body>
+</html>

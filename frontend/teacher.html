@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Teacher Dashboard – Sentence Builder</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="page-wrap">
+
+    <!-- Header -->
+    <header>
+      <h1>
+        📚 Sentence Builder
+        <span class="badge badge-teacher">
+          <span class="dot dot-purple"></span> Teacher
+        </span>
+      </h1>
+      <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+        <div class="conn-status">
+          <span class="conn-dot" id="connDot"></span>
+          <span id="connLabel">Connecting…</span>
+        </div>
+        <a href="student.html" class="btn-secondary" style="text-decoration:none; padding:6px 14px; border-radius:8px; font-size:.85rem;">
+          Open Student Page ↗
+        </a>
+      </div>
+    </header>
+
+    <!-- Stats Bar -->
+    <div class="stats-bar">
+      <div class="stat-box">
+        <div class="stat-num" id="statStudents">0</div>
+        <div class="stat-lbl">Students Online</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num" id="statSubmissions">0</div>
+        <div class="stat-lbl">Submissions</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num" id="statAvgScore">—</div>
+        <div class="stat-lbl">Avg Score</div>
+      </div>
+    </div>
+
+    <!-- Set Word Card -->
+    <div class="card">
+      <div class="card-title">🎯 Set the Word</div>
+      <div class="input-row">
+        <input
+          type="text"
+          id="wordInput"
+          placeholder="Type a word (e.g. Apple)"
+          maxlength="60"
+          autocomplete="off"
+        />
+        <button class="btn-primary" id="setWordBtn">Broadcast Word</button>
+      </div>
+
+      <!-- Current active word -->
+      <div style="margin-top:16px;">
+        <span style="font-size:.85rem; color:var(--gray-400);">Currently active:</span>
+        <strong id="activeWordDisplay" style="margin-left:8px; color:var(--brand); font-size:1.1rem;">
+          (none)
+        </strong>
+      </div>
+
+      <!-- Example sentence (returned from AI with first answer) -->
+      <div id="exampleBox" style="display:none; margin-top:12px;">
+        <div style="font-size:.75rem; color:var(--gray-400); text-transform:uppercase; letter-spacing:.06em; margin-bottom:4px;">
+          AI Example Sentence
+        </div>
+        <div class="example-text" id="exampleSentence"></div>
+      </div>
+    </div>
+
+    <!-- Answer History -->
+    <div class="card">
+      <div class="card-title" style="justify-content:space-between;">
+        <span>📋 Student Answers</span>
+        <button class="btn-secondary" id="clearHistoryBtn" style="font-size:.8rem; padding:4px 12px;">
+          Clear
+        </button>
+      </div>
+      <div class="history-wrap" id="historyWrap">
+        <div class="history-empty" id="historyEmpty">
+          No answers yet. Broadcast a word to get started!
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /.page-wrap -->
+
+  <!-- Toast notification -->
+  <div id="toast"></div>
+
+  <!-- Socket.io client (served by the backend) -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    // ─── State ────────────────────────────────────────────────────────────────
+    const scores = []; // track scores for average calculation
+
+    // ─── Socket Connection (role=teacher) ─────────────────────────────────────
+    const socket = io({ query: { role: 'teacher' } });
+
+    // ─── DOM Refs ─────────────────────────────────────────────────────────────
+    const wordInput        = document.getElementById('wordInput');
+    const setWordBtn       = document.getElementById('setWordBtn');
+    const activeWordDisplay = document.getElementById('activeWordDisplay');
+    const historyWrap      = document.getElementById('historyWrap');
+    const historyEmpty     = document.getElementById('historyEmpty');
+    const statStudents     = document.getElementById('statStudents');
+    const statSubmissions  = document.getElementById('statSubmissions');
+    const statAvgScore     = document.getElementById('statAvgScore');
+    const connDot          = document.getElementById('connDot');
+    const connLabel        = document.getElementById('connLabel');
+    const exampleBox       = document.getElementById('exampleBox');
+    const exampleSentence  = document.getElementById('exampleSentence');
+    const clearHistoryBtn  = document.getElementById('clearHistoryBtn');
+
+    // ─── Connection Status ────────────────────────────────────────────────────
+    socket.on('connect', () => {
+      connDot.className = 'conn-dot online';
+      connLabel.textContent = 'Connected';
+    });
+
+    socket.on('disconnect', () => {
+      connDot.className = 'conn-dot offline';
+      connLabel.textContent = 'Disconnected';
+    });
+
+    // ─── Init: receive current server state on page load ──────────────────────
+    socket.on('init', ({ word, history, studentCount }) => {
+      updateStudentCount(studentCount);
+
+      // Restore active word
+      if (word) setActiveWord(word);
+
+      // Restore history
+      if (history && history.length) {
+        historyEmpty.style.display = 'none';
+        history.forEach(addHistoryItem);
+      }
+    });
+
+    // ─── Live student count updates ───────────────────────────────────────────
+    socket.on('student_count', ({ count }) => updateStudentCount(count));
+
+    function updateStudentCount(count) {
+      statStudents.textContent = count;
+    }
+
+    // ─── Word update confirmation ─────────────────────────────────────────────
+    socket.on('word_update', ({ word }) => {
+      setActiveWord(word);
+      showToast(`Word set to: "${word}"`);
+    });
+
+    // ─── New student answer arrives ───────────────────────────────────────────
+    socket.on('new_answer', (entry) => {
+      historyEmpty.style.display = 'none';
+      addHistoryItem(entry);
+      updateStats(entry.result.score);
+
+      // Show AI example from the first answer for this word
+      if (entry.result.example && !exampleBox.style.display === 'none') {
+        showExample(entry.result.example);
+      }
+      if (entry.result.example) showExample(entry.result.example);
+
+      showToast(`New answer from ${entry.studentName}`);
+    });
+
+    // ─── Broadcast word ───────────────────────────────────────────────────────
+    setWordBtn.addEventListener('click', broadcastWord);
+    wordInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') broadcastWord();
+    });
+
+    function broadcastWord() {
+      const word = wordInput.value.trim();
+      if (!word) { showToast('Please enter a word first.'); return; }
+      socket.emit('set_word', { word });
+      wordInput.value = '';
+      // Reset example each time a new word is set
+      exampleBox.style.display = 'none';
+      exampleSentence.textContent = '';
+    }
+
+    // ─── Clear history (local only) ───────────────────────────────────────────
+    clearHistoryBtn.addEventListener('click', () => {
+      historyWrap.innerHTML = '';
+      historyWrap.appendChild(historyEmpty);
+      historyEmpty.style.display = '';
+      scores.length = 0;
+      statSubmissions.textContent = '0';
+      statAvgScore.textContent = '—';
+    });
+
+    // ─── Helpers ──────────────────────────────────────────────────────────────
+
+    function setActiveWord(word) {
+      activeWordDisplay.textContent = word;
+    }
+
+    function showExample(text) {
+      exampleSentence.textContent = `"${text}"`;
+      exampleBox.style.display = 'block';
+    }
+
+    function updateStats(score) {
+      scores.push(score);
+      statSubmissions.textContent = scores.length;
+      const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+      statAvgScore.textContent = avg;
+    }
+
+    /**
+     * Renders a history entry card for one student answer.
+     */
+    function addHistoryItem(entry) {
+      const { studentName, sentence, result, timestamp } = entry;
+      const time = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const scoreClass = result.score >= 70 ? 'high' : result.score >= 40 ? 'medium' : 'low';
+
+      const checks = [
+        { label: 'Grammar',    ok: result.grammar },
+        { label: 'Uses word',  ok: result.uses_word },
+        { label: 'Meaningful', ok: result.meaningful },
+      ];
+
+      const pillsHtml = checks.map(c =>
+        `<span class="check-pill ${c.ok ? 'ok' : 'bad'}">${c.ok ? '✓' : '✗'} ${c.label}</span>`
+      ).join('');
+
+      const div = document.createElement('div');
+      div.className = 'history-item';
+      div.innerHTML = `
+        <div class="hi-header">
+          <span class="hi-name">${escHtml(studentName)}</span>
+          <span class="hi-time">${time}</span>
+        </div>
+        <div class="hi-sentence">"${escHtml(sentence)}"</div>
+        <div class="hi-pills">
+          ${pillsHtml}
+          <span class="score-badge ${scoreClass}" style="margin-left:auto">${result.score}/100</span>
+        </div>
+        ${result.feedback ? `<div class="feedback-text" style="margin-top:6px;font-size:.82rem;">${escHtml(result.feedback)}</div>` : ''}
+      `;
+
+      // Prepend so newest answers appear at top
+      historyWrap.insertBefore(div, historyWrap.firstChild);
+    }
+
+    // ─── Toast ────────────────────────────────────────────────────────────────
+    let toastTimer;
+    function showToast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+    }
+
+    // XSS guard
+    function escHtml(str) {
+      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+  </script>
+</body>
+</html>
